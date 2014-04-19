@@ -290,7 +290,7 @@ auth_command(struct session *s, int cmd, char *args)
 		capa(s);
 		break;
 	case CMD_USER:
-		strlcpy(s->user, args, sizeof(s->user));
+		(void)strlcpy(s->user, args, sizeof(s->user));
 		session_reply(s, "%s", "+OK");
 		break;
 	case CMD_PASS:
@@ -298,7 +298,7 @@ auth_command(struct session *s, int cmd, char *args)
 			session_reply(s, "%s", "-ERR no USER specified");
 			break;
 		}
-		strlcpy(s->pass, args, sizeof(s->pass));
+		(void)strlcpy(s->pass, args, sizeof(s->pass));
 		auth_request(s);
 		return;
 	case CMD_QUIT:
@@ -321,8 +321,8 @@ auth_request(struct session *s)
 	struct auth_req		req;
 
 	memset(&req, 0, sizeof(req));
-	strlcpy(req.user, s->user, sizeof(req.user));
-	strlcpy(req.pass, s->pass, sizeof(req.pass));
+	(void)strlcpy(req.user, s->user, sizeof(req.user));
+	(void)strlcpy(req.pass, s->pass, sizeof(req.pass));
 	imsgev_xcompose(&iev_pop3d, IMSG_AUTH, s->id, 0, -1,
 	    &req, sizeof(req), "auth_request");
 }
@@ -675,7 +675,7 @@ strstate(enum state state)
 	CASE(TRANSACTION);
 	CASE(UPDATE);
 	default:
-		snprintf(buf, sizeof(buf), "%d ???", state);
+		(void)snprintf(buf, sizeof(buf), "%d ???", state);
 		return (buf);
 	}
 }
