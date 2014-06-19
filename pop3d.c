@@ -238,7 +238,7 @@ usage(void)
 {
 	extern char *__progname;
 
-	fprintf(stderr, "usage: %s [-d] [-p path] [-t type]\n", __progname);
+	fprintf(stderr, "usage: %s [-46d] [-p path] [-t type]\n", __progname);
 	exit(EXIT_FAILURE);
 }
 
