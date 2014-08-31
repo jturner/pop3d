@@ -94,7 +94,7 @@ static void session_write(struct session *, const char *, size_t);
 static const char *strstate(enum state);
 
 struct session_tree	sessions;
-static int		_pop3_debug = 1;
+static int		_pop3_debug = 0;
 
 void
 session_init(struct listener *l, int fd)
@@ -133,7 +133,7 @@ session_close(struct session *s, int flush)
 
 	entry = SPLAY_REMOVE(session_tree, &sessions,  s);
 	if (entry == NULL) {
-		 /* STARTTLS session was in progress and got interrupted */
+		/* STARTTLS session was in progress and got interrupted */
 		logit(LOG_DEBUG, "%u: not in tree", s->id);
 		entry = s;
 	}
@@ -147,7 +147,14 @@ session_close(struct session *s, int flush)
 
 	io_clear(&entry->io);
 	iobuf_clear(&entry->iobuf);
-	imsgev_clear(&entry->iev_maildrop);
+	 /* 
+	  * If the session hadn't made it to TRANSACTION
+	  * iev_maildrop is not inited.
+	  */
+	if (entry->iev_maildrop) {
+		imsgev_clear(entry->iev_maildrop);
+		entry->iev_maildrop->terminate = 1;
+	}
 	logit(LOG_INFO, "%u: session closed", entry->id);
 	free(entry);
 }
@@ -373,7 +380,7 @@ trans_command(struct session *s, int cmd, char *args)
 	case CMD_RETR:
 		if (!get_index(s, args, &retr_req.idx))
 			break;
-		imsgev_xcompose(&s->iev_maildrop, IMSG_MAILDROP_RETR,
+		imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_RETR,
 		    s->id, 0, -1, &retr_req, sizeof(retr_req), "trans_command");
 		return;
 	case CMD_NOOP:
@@ -382,11 +389,11 @@ trans_command(struct session *s, int cmd, char *args)
 	case CMD_DELE:
 		if (!get_index(s, args, &idx))
 			break;
-		imsgev_xcompose(&s->iev_maildrop, IMSG_MAILDROP_DELE,
+		imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_DELE,
 		    s->id, 0, -1, &idx, sizeof(idx), "trans_command");
 		return;
 	case CMD_RSET:
-		imsgev_xcompose(&s->iev_maildrop, IMSG_MAILDROP_RSET,
+		imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_RSET,
 		    s->id, 0, -1, NULL, 0, "trans_command");
 		return;
 	case CMD_UIDL:
@@ -401,7 +408,7 @@ trans_command(struct session *s, int cmd, char *args)
 			get_list_all(s, uidl);
 		return;
 	case CMD_QUIT:
-		imsgev_xcompose(&s->iev_maildrop, IMSG_MAILDROP_UPDATE,
+		imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_UPDATE,
 		    s->id, 0, -1, NULL, 0, "trans_command");
 		session_set_state(s, UPDATE);
 		return;
@@ -418,7 +425,7 @@ get_list_all(struct session *s, int uidl)
 {
 	io_pause(&s->io, IO_PAUSE_IN);
 	session_reply(s, "+OK");
-	imsgev_xcompose(&s->iev_maildrop, IMSG_MAILDROP_LISTALL,
+	imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_LISTALL,
 	    s->id, 0, -1, &uidl, sizeof(uidl), "list_all");
 }
 
@@ -429,14 +436,18 @@ get_list(struct session *s, unsigned int i, int uidl)
 
 	req.idx = i;
 	req.uidl = uidl;
-	imsgev_xcompose(&s->iev_maildrop, IMSG_MAILDROP_LIST,
+	imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_LIST,
 	    s->id, 0, -1, &req, sizeof(req), "list");
 }
 
 void
 session_imsgev_init(struct session *s, int fd)
 {
-	imsgev_init(&s->iev_maildrop, fd, s, maildrop_imsgev, needfd);
+	s->iev_maildrop = xcalloc(1, sizeof(struct imsgev),
+	    "session_imsgev_init");
+	imsgev_init(s->iev_maildrop, fd, NULL, maildrop_imsgev, needfd);
+	imsgev_xcompose(s->iev_maildrop, IMSG_MAILDROP_INIT, s->id, 0,
+	    -1, s->user, sizeof(s->user), "session_imsgev_init");
 }
 
 static void
@@ -485,6 +496,9 @@ maildrop_imsgev(struct imsgev *iev, int code, struct imsg *imsg)
 	case IMSGEV_EWRITE:
 	case IMSGEV_EIMSG:
 		fatal("session: imsgev read/write error");
+		break;
+	case IMSGEV_DONE:
+		free(iev);
 		break;
 	}
 }
@@ -708,7 +722,7 @@ session_write(struct session *s, const char *data, size_t len)
 	if (data[len - 1] == '\n')
 		len -= 1;
 
-	if (data[len - 1] == '\r')
+	if (len && data[len - 1] == '\r')
 		len -= 1;
 
 	/* byte stuff "." if at beginning of line */
