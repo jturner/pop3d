@@ -49,7 +49,7 @@ static void usage(void);
 static struct imsgev	iev_pop3e;
 const char		*mpath;
 int			mtype = M_MBOX;
-static int		afamily = AF_UNSPEC;
+int			afamily = AF_UNSPEC;
 
 int
 main(int argc, char *argv[])
