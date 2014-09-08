@@ -182,6 +182,8 @@ authenticate(struct imsgev *iev, struct imsg *imsg)
 	if (maildrop_setup(imsg->hdr.peerid, pair, pw) == -1) {
 		logit(LOG_INFO, "%u: unable to fork maildrop process",
 		    imsg->hdr.peerid);
+		close(pair[0]);
+		close(pair[1]);
 		pair[0] = -1;
 		goto end;
 	}
