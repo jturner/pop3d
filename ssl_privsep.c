@@ -81,6 +81,7 @@ int	 ssl_ctx_use_certificate_chain(SSL_CTX *, char *, off_t);
 int	 ssl_ctx_load_verify_memory(SSL_CTX *, char *, off_t);
 int	 ssl_by_mem_ctrl(X509_LOOKUP *, int, const char *, long, char **);
 
+#if 0
 X509_LOOKUP_METHOD x509_mem_lookup = {
 	"Load cert from memory",
 	NULL,			/* new */
@@ -95,6 +96,7 @@ X509_LOOKUP_METHOD x509_mem_lookup = {
 };
 
 #define X509_L_ADD_MEM	3
+#endif
 
 int
 ssl_ctx_use_private_key(SSL_CTX *ctx, char *buf, off_t len)
@@ -193,19 +195,19 @@ ssl_ctx_load_verify_memory(SSL_CTX *ctx, char *buf, off_t len)
 	struct iovec		 iov;
 
 	if ((lu = X509_STORE_add_lookup(SSL_CTX_get_cert_store(ctx),
-	    &x509_mem_lookup)) == NULL)
+	    X509_LOOKUP_mem())) == NULL)
 		return (0);
 
 	iov.iov_base = buf;
 	iov.iov_len = len;
 
-	if (!ssl_by_mem_ctrl(lu, X509_L_ADD_MEM,
-	    (const char *)&iov, X509_FILETYPE_PEM, NULL))
+	if (!X509_LOOKUP_add_mem(lu, &iov, X509_FILETYPE_PEM))
 		return (0);
 
 	return (1);
 }
 
+#if 0
 int
 ssl_by_mem_ctrl(X509_LOOKUP *lu, int cmd, const char *buf,
     long type, char **ret)
@@ -248,3 +250,4 @@ ssl_by_mem_ctrl(X509_LOOKUP *lu, int cmd, const char *buf,
 		BIO_free(in);
 	return (count);
 }
+#endif
